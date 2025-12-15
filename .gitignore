@@ -1,0 +1,170 @@
+# 编译输出目录
+bin/
+build/
+target/
+dist/
+out/
+
+# IDE 相关文件
+# Eclipse
+.project
+.classpath
+.settings/
+.metadata/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# MyEclipse
+.myeclipse/
+profiler/
+
+# NetBeans
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# VS Code
+.vscode/
+
+# 临时文件和日志
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# 操作系统生成的文件
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Linux
+*~
+
+# Java 相关
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 音频文件（录制的语音消息）
+*.mp3
+*.wav
+*.ogg
+*.m4a
+*.aac
+
+# 图片文件（传输的图片，避免大文件）
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.ico
+
+# 视频文件
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.webm
+
+# 文档文件（传输的文件）
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
+# 压缩文件
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+
+# 聊天记录文件
+chat_record_*.txt
+
+# 配置文件（包含敏感信息）
+config.properties
+database.properties
+*.secret
+*.key
+
+# 缓存文件
+.cache/
+*.cache
+
+# 测试输出
+test-output/
+coverage/
+
+# 依赖目录
+node_modules/
+
+# 应用运行时生成的文件
+*.pid
+*.lock
+
+# 用户特定的配置文件
+user.properties
+local.properties
+
+# 备份文件
+*.backup
+*.bak
+
+# 大文件标记（超过50MB的文件应该被提醒）
+*.large
+
+# 自定义项目特定忽略
+# Socket聊天室传输的临时文件
+temp_*
+upload_*
+download_*
+
+# 音频录制临时文件
+recording_*
+audio_*
+
+# 截图文件（如果实现截图功能）
+screenshot_*
+capture_*
+
+# 日志目录
+logs/
+
+# 服务器运行日志
+server.log
+error.log
+access.log
