@@ -49,13 +49,20 @@ public class Register extends JFrame {
 		lablePwd2 = new JLabel("重填密码");
 		lablePwd2.setBounds(80, 150, 110, 35);
 		lablePwd2.setFont(new Font("宋体", Font.PLAIN, 18));
+		// 添加提示标签
+		JLabel hintLabel = new JLabel("系统将自动为您分配8位数字账号");
+		hintLabel.setBounds(180, 200, 300, 30);
+		hintLabel.setFont(new Font("宋体", Font.PLAIN, 14));
+		hintLabel.setForeground(Color.GRAY);
+
 		// 注册按钮
 		btnRegister = new JButton("注册");
-		btnRegister.setBounds(250, 200, 150, 40);
+		btnRegister.setBounds(250, 240, 150, 40);
 		btnRegister.setFont(new Font("宋体", Font.PLAIN, 18));
-		btnRegister.setBackground(new Color(173, 216, 230)); // 设置浅蓝色背景
-		btnRegister.setForeground(Color.BLACK);
+		btnRegister.setBackground(new Color(255, 182, 193)); // 使用粉色主题
+		btnRegister.setForeground(Color.WHITE);
 		btnRegister.setFocusPainted(false);
+		btnRegister.setBorderPainted(false);
 		btnRegister.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				String name = userName.getText();
@@ -68,13 +75,14 @@ public class Register extends JFrame {
 		con.add(lableUser);
 		con.add(lablePwd);
 		con.add(lablePwd2);
+		con.add(hintLabel);
 		con.add(userName);
 		con.add(password);
 		con.add(password2);
 		con.add(btnRegister);
 		this.setTitle("注册窗口");// 设置窗口标题
 		this.setLayout(null);// 设置布局方式为自定义位置
-		this.setBounds(0, 0, 550, 280);
+		this.setBounds(0, 0, 550, 320);
 		this.setResizable(false);// 窗口大小不可改变
 		this.setLocationRelativeTo(null);// 居中显示
 		this.setVisible(true);// 窗口可见
@@ -85,14 +93,35 @@ public class Register extends JFrame {
 	// 注册方法
 	private void registerUser(String name, String pwd1, String pwd2) {
 		if (pwd1.equals(pwd2)) {
+			// 验证用户名不为空
+			if (name == null || name.trim().isEmpty()) {
+				JOptionPane.showMessageDialog(new JFrame(), "用户名不能为空！", "错误",
+						JOptionPane.ERROR_MESSAGE);
+				return;
+			}
+
+			// 验证密码长度
+			if (pwd1.length() < 6) {
+				JOptionPane.showMessageDialog(new JFrame(), "密码长度至少6位！", "错误",
+						JOptionPane.ERROR_MESSAGE);
+				password.setText("");
+				password2.setText("");
+				return;
+			}
+
 			UserDB c = new UserDB(name, pwd2);
 			if (c.addsql() == true) {
+				// 注册成功，获取用户信息
+				String[] userInfo = c.getUserInfo(name);
+				String assignedUserId = userInfo != null ? userInfo[0] : "未知";
+
 				JOptionPane.showMessageDialog(new JFrame(),
-						"注册成功！\n请记住您的账号和密码", "成功", JOptionPane.CLOSED_OPTION);
+						"注册成功！\n您的用户名：" + name + "\n您的账号：" + assignedUserId + "\n请妥善保管账号和密码",
+						"注册成功", JOptionPane.INFORMATION_MESSAGE);
 				this.setVisible(false); // 关闭注册窗口
 				new Client(name); // 打开聊天界面
 			} else {
-				JOptionPane.showMessageDialog(new JFrame(), "注册失败，该用户名可能已存在", "错误",
+				JOptionPane.showMessageDialog(new JFrame(), "注册失败，该用户名已存在", "错误",
 						JOptionPane.ERROR_MESSAGE);
 			}
 		} else {
@@ -100,7 +129,6 @@ public class Register extends JFrame {
 					JOptionPane.ERROR_MESSAGE);
 			password.setText("");
 			password2.setText("");
-			
 		}
 	}
 }

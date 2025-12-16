@@ -48,6 +48,14 @@ import javax.swing.border.TitledBorder;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+
+// 好友管理相关导入
+import Model.Friend;
+import Model.FriendRequest;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.util.List;
+import java.util.ArrayList;
 import java.io.FileOutputStream;
 
 import javax.swing.JFileChooser;
@@ -119,6 +127,10 @@ public class Client extends JFrame {
 	private TargetDataLine td = null;
 	private ByteArrayInputStream bais = null;
 	private ByteArrayOutputStream baos = null;
+
+	// 好友管理窗口
+	private AddFriendWindow addFriendWindow;
+	private FriendRequestWindow friendRequestWindow;
 	private AudioInputStream ais = null;
 	private Boolean stopflag = false;
 
@@ -227,7 +239,20 @@ public class Client extends JFrame {
 			JButton btn_shake = new JButton("窗口抖动");
 			btn_shake.setForeground(Color.DARK_GRAY);
 			btn_shake.setFont(new Font("Microsoft JhengHei Light", Font.PLAIN, 15));
-			
+
+			// 添加好友管理按钮
+			JButton btn_friend_list = new JButton("好友列表");
+			btn_friend_list.setForeground(Color.DARK_GRAY);
+			btn_friend_list.setFont(new Font("Microsoft JhengHei Light", Font.PLAIN, 15));
+
+			JButton btn_add_friend = new JButton("添加好友");
+			btn_add_friend.setForeground(Color.DARK_GRAY);
+			btn_add_friend.setFont(new Font("Microsoft JhengHei Light", Font.PLAIN, 15));
+
+			JButton btn_friend_requests = new JButton("好友申请");
+			btn_friend_requests.setForeground(Color.DARK_GRAY);
+			btn_friend_requests.setFont(new Font("Microsoft JhengHei Light", Font.PLAIN, 15));
+
 			buttonPanel.add(comboBox);
 			buttonPanel.add(btn_pic);
 			buttonPanel.add(btn_mp4_start);
@@ -236,6 +261,9 @@ public class Client extends JFrame {
 			buttonPanel.add(btn_view_record);
 			buttonPanel.add(btn_font);
 			buttonPanel.add(btn_shake);
+			buttonPanel.add(btn_friend_list);
+			buttonPanel.add(btn_add_friend);
+			buttonPanel.add(btn_friend_requests);
 		
 		// 保存聊天记录按钮事件
 		btn_save_record.addActionListener(new ActionListener() {
@@ -267,6 +295,37 @@ public class Client extends JFrame {
 				}
 				sendMessage(frame.getTitle() + "@" + comboBox.getSelectedItem().toString() + "@" + "SHAKE" + "@" + "not");
 				JOptionPane.showMessageDialog(frame, "抖动消息已发送!");
+			}
+		});
+
+		// 好友列表按钮事件
+		btn_friend_list.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				showFriendListWindow();
+			}
+		});
+
+		// 添加好友按钮事件
+		btn_add_friend.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				// 先获取好友列表，然后打开添加好友窗口
+				sendFriendListRequest();
+				// 创建一个临时的好友列表窗口用于添加好友
+				FriendListWindow tempFriendList = new FriendListWindow(Client.this);
+				addFriendWindow = new AddFriendWindow(Client.this, tempFriendList);
+				addFriendWindow.setVisible(true);
+			}
+		});
+
+		// 好友申请按钮事件
+		btn_friend_requests.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				// 先获取好友申请列表
+				sendFriendRequestsRequest();
+				// 创建一个空的好友申请列表，窗口会自动从服务器获取最新数据
+				java.util.List<Model.FriendRequest> emptyRequests = new java.util.ArrayList<>();
+				friendRequestWindow = new FriendRequestWindow(Client.this, emptyRequests);
+				friendRequestWindow.setVisible(true);
 			}
 		});
 		
@@ -851,7 +910,75 @@ javax.swing.JTextArea recordText = new javax.swing.JTextArea(content);
 			}
 		}
 	}
-	
+
+	// ==================== 好友管理功能 ====================
+
+	/**
+	 * 发送用户搜索请求
+	 */
+	public void sendUserSearchRequest(String keyword) {
+		sendMessage(name + "@USER_SEARCH@" + keyword);
+	}
+
+	/**
+	 * 发送好友申请
+	 */
+	public void sendFriendRequest(String targetUserId, String message) {
+		sendMessage(name + "@FRIEND_ADD@" + targetUserId + "@" + message);
+	}
+
+	/**
+	 * 发送获取好友列表请求
+	 */
+	public void sendFriendListRequest() {
+		sendMessage(name + "@FRIEND_LIST@");
+	}
+
+	/**
+	 * 发送获取好友申请请求
+	 */
+	public void sendFriendRequestsRequest() {
+		sendMessage(name + "@FRIEND_REQUESTS@");
+	}
+
+	/**
+	 * 同意好友申请
+	 */
+	public void sendAcceptFriendRequest(String fromUserId, int requestId) {
+		sendMessage(name + "@FRIEND_ACCEPT@" + fromUserId + "@" + requestId);
+	}
+
+	/**
+	 * 拒绝好友申请
+	 */
+	public void sendRejectFriendRequest(String fromUserId, int requestId) {
+		sendMessage(name + "@FRIEND_REJECT@" + fromUserId + "@" + requestId);
+	}
+
+	/**
+	 * 删除好友
+	 */
+	public void sendDeleteFriendRequest(String friendId) {
+		sendMessage(name + "@FRIEND_DELETE@" + friendId);
+	}
+
+	/**
+	 * 设置私聊目标
+	 */
+	public void setPrivateChatTarget(String targetNickname) {
+		UserValue = targetNickname;
+		comboBox.setSelectedItem(targetNickname);
+		JOptionPane.showMessageDialog(frame, "已开始与 " + targetNickname + " 的私聊", "私聊提示", JOptionPane.INFORMATION_MESSAGE);
+	}
+
+	/**
+	 * 显示好友列表窗口
+	 */
+	public void showFriendListWindow() {
+		FriendListWindow friendListWindow = new FriendListWindow(this);
+		friendListWindow.setVisible(true);
+	}
+
 	// 消息接收线程
 
 	// ------------------------------------------------------------------------------------
@@ -871,6 +998,10 @@ javax.swing.JTextArea recordText = new javax.swing.JTextArea(content);
 				try {
 					if (flag == 0) {
 						message = reader.readLine();
+						// 添加null检查，防止NullPointerException
+						if (message == null || message.trim().isEmpty()) {
+							continue;
+						}
 						StringTokenizer stringTokenizer = new StringTokenizer(message, "@");
 						// ��������Ϣ����
 						String[] str_msg = new String[10];
@@ -982,6 +1113,74 @@ javax.swing.JTextArea recordText = new javax.swing.JTextArea(content);
 					}
 					playWAV.Play("sounds/msg.wav");
 				}
+						// ==================== 好友管理功能处理 ====================
+						// 用户搜索结果
+						else if (command.equals("USER_SEARCH_RESULT")) {
+							// 更新AddFriendWindow的搜索结果
+							if (addFriendWindow != null && addFriendWindow.isShowing()) {
+								String searchResultsJson = str_msg[2];
+								addFriendWindow.updateSearchResults(searchResultsJson);
+								System.out.println("已更新搜索结果: " + searchResultsJson);
+							} else {
+								System.out.println("AddFriendWindow不存在或未显示");
+							}
+						}
+						// 好友列表响应
+						else if (command.equals("FRIEND_LIST_RESULT")) {
+							try {
+								Gson gson = new Gson();
+								String friendListJson = str_msg[2];
+								List<Friend> friendList = gson.fromJson(friendListJson, new TypeToken<List<Friend>>() {}.getType());
+								// 更新好友列表窗口
+								// 需要与FriendListWindow实例关联
+							} catch (Exception e) {
+								System.out.println("解析好友列表失败: " + e.getMessage());
+							}
+						}
+						// 好友申请列表响应
+						else if (command.equals("FRIEND_REQUESTS_RESULT")) {
+							try {
+								Gson gson = new Gson();
+								String requestsJson = str_msg[2];
+								System.out.println("收到好友申请JSON: " + requestsJson);
+								System.out.println("JSON长度: " + requestsJson.length());
+
+								List<FriendRequest> requests = gson.fromJson(requestsJson, new TypeToken<List<FriendRequest>>() {}.getType());
+								System.out.println("JSON解析成功，解析到 " + requests.size() + " 条申请");
+
+								// 更新好友申请窗口
+								if (friendRequestWindow != null && friendRequestWindow.isShowing()) {
+									friendRequestWindow.updateRequestList(requests);
+									System.out.println("已更新好友申请列表: " + requests.size() + " 条申请");
+								} else {
+									System.out.println("好友申请窗口未显示或为null");
+								}
+							} catch (Exception e) {
+								System.out.println("解析好友申请列表失败: " + e.getMessage());
+								System.out.println("完整错误信息: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+								e.printStackTrace();
+							}
+						}
+						// 好友申请处理结果
+						else if (command.equals("FRIEND_ADD_RESULT")) {
+							boolean success = Boolean.parseBoolean(str_msg[2]);
+							String resultMsg = str_msg.length > 3 ? str_msg[3] : "";
+							if (success) {
+								JOptionPane.showMessageDialog(frame, "好友申请发送成功！", "成功", JOptionPane.INFORMATION_MESSAGE);
+							} else {
+								JOptionPane.showMessageDialog(frame, "好友申请发送失败：" + resultMsg, "失败", JOptionPane.ERROR_MESSAGE);
+							}
+						}
+						// 好友申请接受/拒绝结果
+						else if (command.equals("FRIEND_PROCESS_RESULT")) {
+							boolean success = Boolean.parseBoolean(str_msg[2]);
+							String resultMsg = str_msg.length > 3 ? str_msg[3] : "";
+							if (success) {
+								JOptionPane.showMessageDialog(frame, "好友申请处理成功！", "成功", JOptionPane.INFORMATION_MESSAGE);
+							} else {
+								JOptionPane.showMessageDialog(frame, "好友申请处理失败：" + resultMsg, "失败", JOptionPane.ERROR_MESSAGE);
+							}
+						}
 						// 处理图片
 						else if (command.equals("PIC_up_ok")) {
 							sendMessage(name + "@" + "PIC_down");

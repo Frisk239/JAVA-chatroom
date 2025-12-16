@@ -114,18 +114,25 @@ public class Login extends JFrame {
 		//
 		// lableBg = new JLabel();
 		// lableBg.setBounds(25, 20, 200, 200);
-		// 用户名输入框
+		// 用户名输入框（支持用户名或账号登录）
 		userName = new JTextField("10000");
 		userName.setBounds(170, 167, 219, 35);
 		userName.setFont(new Font("Microsoft JhengHei Light", Font.PLAIN, 25));
 		userName.setBorder(null);
 		contentPane.add(userName);
 		// 用户名标签
-		lableUser = new JLabel("用户名");
+		lableUser = new JLabel("用户名/账号");
 		lableUser.setBounds(37, 170, 126, 27);
 		lableUser.setFont(new Font("Microsoft JhengHei Light", Font.PLAIN, 25));
 		lableUser.setForeground(Color.WHITE);
 		contentPane.add(lableUser);
+
+		// 添加提示标签
+		JLabel hintLabel = new JLabel("可使用用户名或8位账号登录");
+		hintLabel.setBounds(170, 140, 219, 20);
+		hintLabel.setFont(new Font("Microsoft JhengHei Light", Font.PLAIN, 12));
+		hintLabel.setForeground(new Color(255, 255, 255, 180)); // 半透明白色
+		contentPane.add(hintLabel);
 		// 密码输入框
 		password = new JPasswordField("123456");
 		password.setBounds(170, 212, 219, 35);

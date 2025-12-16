@@ -21,6 +21,8 @@ import com.google.gson.Gson;
 
 import Server_.Transmission;
 import Server_.Base64Utils;
+import Model.Friend;
+import Model.FriendRequest;
 
 public class ServerThread extends Thread {
 	Socket s = null;
@@ -37,9 +39,14 @@ public class ServerThread extends Thread {
 	String file_name_just = null;
 	boolean file_is_create = true;
 	boolean client_rec_first = true;
+
+	// 好友管理器
+	private FriendManager friendManager;
+	private String currentUserId; // 当前用户的ID
 	
 	public ServerThread(Socket s) throws IOException {
 		this.s = s;
+		this.friendManager = FriendManager.getInstance();
 	}
 	//按目录文件时间排序
 	 public static List<File> getFileSort(String path) {
@@ -120,6 +127,9 @@ public class ServerThread extends Thread {
 					return;
 				} else {
 					user = new User(str_msg[0], str_msg[2]);
+					// 设置当前用户ID（暂时使用用户名作为ID，后续可以从数据库获取真实的user_id）
+					currentUserId = str_msg[0];
+					System.out.println("用户登录: " + currentUserId);
 				}
 			} else if (command.equals("ALL")) {
 							for (PrintStream ps_ : Server.clients_string.valueSet()) {
@@ -129,6 +139,14 @@ public class ServerThread extends Thread {
 				System.out.println("CLOSE!");
 				// 获取要断开的用户名
 				String username = str_msg[0];
+
+				// 清除用户的好友管理缓存
+				if (friendManager != null && currentUserId != null) {
+					friendManager.updateUserOnlineStatus(currentUserId, false);
+					friendManager.clearUserCache(currentUserId);
+					System.out.println("清除用户缓存: " + currentUserId);
+				}
+
 				// 广播用户下线通知
 				for (PrintStream ps_ : Server.clients_string.valueSet()) {
 					ps_.println(username + "@DELETE");
@@ -149,6 +167,11 @@ public class ServerThread extends Thread {
 				}
 			} else if (command.equals("ADD")) {
 							Server.clients_string.put(user, ps);
+							// 更新用户在线状态
+							if (friendManager != null && currentUserId != null) {
+								friendManager.updateUserOnlineStatus(currentUserId, true);
+								System.out.println("用户上线: " + currentUserId);
+							}
 						} else if (command.equals("USERLIST")) {
 							String userlist = "";
 							for (User user_ : Server.clients_string.map.keySet()) {
@@ -158,6 +181,119 @@ public class ServerThread extends Thread {
 							}
 							PrintStream ps_ = new PrintStream(s.getOutputStream(), true, "UTF-8");
 			ps_.println("Server@USERLIST" + userlist);
+						} else if (command.equals("FRIEND_ADD")) {
+							// 好友申请：格式：发送者@FRIEND_ADD@目标用户@申请消息
+							String targetUser = str_msg[2];
+							String message = str_msg.length > 3 ? str_msg[3] : "请求添加您为好友";
+							System.out.println("好友申请: " + currentUserId + " -> " + targetUser);
+
+							boolean success = friendManager.sendFriendRequest(currentUserId, targetUser, message);
+							if (success) {
+								ps.println("Server@FRIEND_ADD_SUCCESS@" + targetUser);
+
+								// 通知目标用户（如果在线）
+								for (User onlineUser : Server.clients_string.map.keySet()) {
+									if (onlineUser.getName().equals(targetUser)) {
+										PrintStream targetPs = Server.clients_string.map.get(onlineUser);
+										targetPs.println("Server@FRIEND_REQUEST@" + currentUserId + "@" + message);
+										break;
+									}
+								}
+							} else {
+								ps.println("Server@FRIEND_ADD_FAILED@" + targetUser);
+							}
+
+						} else if (command.equals("FRIEND_ACCEPT")) {
+							// 同意好友申请：格式：发送者@FRIEND_ACCEPT@申请人ID@申请ID
+							String fromUserId = str_msg[2];
+							int requestId = Integer.parseInt(str_msg[3]);
+							System.out.println("同意好友申请: " + fromUserId + " -> " + currentUserId);
+
+							boolean success = friendManager.processFriendRequest(requestId, fromUserId, currentUserId, 1);
+							if (success) {
+								ps.println("Server@FRIEND_ACCEPT_SUCCESS@" + fromUserId);
+
+								// 通知对方（如果在线）
+								for (User onlineUser : Server.clients_string.map.keySet()) {
+									if (onlineUser.getName().equals(fromUserId)) {
+										PrintStream targetPs = Server.clients_string.map.get(onlineUser);
+										targetPs.println("Server@FRIEND_ACCEPTED@" + currentUserId);
+										break;
+									}
+								}
+							} else {
+								ps.println("Server@FRIEND_ACCEPT_FAILED");
+							}
+
+						} else if (command.equals("FRIEND_REJECT")) {
+							// 拒绝好友申请：格式：发送者@FRIEND_REJECT@申请人ID@申请ID
+							String fromUserId = str_msg[2];
+							int requestId = Integer.parseInt(str_msg[3]);
+							System.out.println("拒绝好友申请: " + fromUserId + " -> " + currentUserId);
+
+							boolean success = friendManager.processFriendRequest(requestId, fromUserId, currentUserId, 2);
+							if (success) {
+								ps.println("Server@FRIEND_REJECT_SUCCESS@" + fromUserId);
+
+								// 通知对方（如果在线）
+								for (User onlineUser : Server.clients_string.map.keySet()) {
+									if (onlineUser.getName().equals(fromUserId)) {
+										PrintStream targetPs = Server.clients_string.map.get(onlineUser);
+										targetPs.println("Server@FRIEND_REJECTED@" + currentUserId);
+										break;
+									}
+								}
+							} else {
+								ps.println("Server@FRIEND_REJECT_FAILED");
+							}
+
+						} else if (command.equals("FRIEND_LIST")) {
+							// 获取好友列表：格式：发送者@FRIEND_LIST
+							System.out.println("获取好友列表: " + currentUserId);
+
+							String friendListJson = friendManager.getFriendListJson(currentUserId);
+							ps.println("Server@FRIEND_LIST@" + friendListJson);
+
+						} else if (command.equals("FRIEND_REQUESTS")) {
+							// 获取待处理的好友申请：格式：发送者@FRIEND_REQUESTS
+							System.out.println("获取好友申请: " + currentUserId);
+
+							String requestsJson = friendManager.getPendingRequestsJson(currentUserId);
+							System.out.println("发送好友申请JSON: " + requestsJson);
+							ps.println("Server@FRIEND_REQUESTS_RESULT@" + requestsJson);
+							System.out.println("已发送FRIEND_REQUESTS_RESULT消息");
+
+						} else if (command.equals("FRIEND_DELETE")) {
+							// 删除好友：格式：发送者@FRIEND_DELETE@好友ID
+							String friendId = str_msg[2];
+							System.out.println("删除好友: " + currentUserId + " -> " + friendId);
+
+							boolean success = friendManager.deleteFriend(currentUserId, friendId);
+							if (success) {
+								ps.println("Server@FRIEND_DELETE_SUCCESS@" + friendId);
+
+								// 通知对方（如果在线）
+								for (User onlineUser : Server.clients_string.map.keySet()) {
+									if (onlineUser.getName().equals(friendId)) {
+										PrintStream targetPs = Server.clients_string.map.get(onlineUser);
+										targetPs.println("Server@FRIEND_DELETED@" + currentUserId);
+										break;
+									}
+								}
+							} else {
+								ps.println("Server@FRIEND_DELETE_FAILED@" + friendId);
+							}
+
+						} else if (command.equals("USER_SEARCH")) {
+							// 搜索用户：格式：发送者@USER_SEARCH@关键词
+							String keyword = str_msg[2];
+							System.out.println("搜索用户: " + currentUserId + " 关键词: " + keyword);
+
+							String searchResultsJson = friendManager.getSearchResultsJson(keyword, currentUserId);
+							System.out.println("发送搜索结果JSON: " + searchResultsJson);
+							ps.println("Server@USER_SEARCH_RESULT@" + searchResultsJson);
+							System.out.println("已发送USER_SEARCH_RESULT消息");
+
 						} else if (user_list > 20) {
 							PrintStream ps_ = new PrintStream(s.getOutputStream(), true, "UTF-8");
 			ps_.println("Server@MAX");
