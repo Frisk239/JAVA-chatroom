@@ -162,24 +162,35 @@ public class FriendManager {
      * 获取好友列表的JSON格式字符串（用于客户端显示）
      */
     public String getFriendListJson(String userId) {
+        System.out.println("开始获取好友列表JSON，用户ID: " + userId);
         List<Friend> friendList = getFriendList(userId);
+        System.out.println("从数据库获取到好友列表数量: " + friendList.size());
+
         StringBuilder json = new StringBuilder();
         json.append("[");
 
         for (int i = 0; i < friendList.size(); i++) {
             Friend friend = friendList.get(i);
+            System.out.println("好友 " + i + ": " +
+                "ID=" + friend.getFriendId() +
+                ", 昵称=" + friend.getFriendNickname() +
+                ", 头像=" + friend.getFriendAvatar() +
+                ", 在线=" + friend.isOnline());
+
             if (i > 0) json.append(",");
             json.append("{")
-               .append("\"userId\":\"").append(friend.getFriendId()).append("\",")
-               .append("\"nickname\":\"").append(friend.getFriendNickname() != null ? friend.getFriendNickname() : "").append("\",")
-               .append("\"remark\":\"").append(friend.getFriendRemark() != null ? friend.getFriendRemark() : "").append("\",")
-               .append("\"avatar\":\"").append(friend.getFriendAvatar() != null ? friend.getFriendAvatar() : "").append("\",")
-               .append("\"online\":").append(friend.isOnline())
+               .append("\"friendId\":\"").append(friend.getFriendId()).append("\",")
+               .append("\"friendNickname\":\"").append(friend.getFriendNickname() != null ? friend.getFriendNickname() : "").append("\",")
+               .append("\"friendRemark\":\"").append(friend.getFriendRemark() != null ? friend.getFriendRemark() : "").append("\",")
+               .append("\"friendAvatar\":\"").append(friend.getFriendAvatar() != null ? friend.getFriendAvatar() : "").append("\",")
+               .append("\"isOnline\":").append(friend.isOnline())
                .append("}");
         }
 
         json.append("]");
-        return json.toString();
+        String result = json.toString();
+        System.out.println("生成的好友列表JSON: " + result);
+        return result;
     }
 
     /**
@@ -259,6 +270,87 @@ public class FriendManager {
         friendListCache.remove(userId);
         requestCache.remove(userId);
         System.out.println("清除用户缓存: " + userId);
+    }
+
+    /**
+     * 验证两个用户是否为好友关系
+     */
+    public boolean areFriends(String userId1, String userId2) {
+        try {
+            List<Friend> friends = userDB.getFriendList(userId1);
+            if (friends != null) {
+                for (Friend friend : friends) {
+                    if (friend.getFriendId().equals(userId2)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            System.out.println("验证好友关系失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 保存私聊消息
+     */
+    public boolean savePrivateMessage(String fromUserId, String toUserId, String messageType, String content) {
+        try {
+            return userDB.saveChatRecord(fromUserId, toUserId, messageType, content, null, null, null);
+        } catch (Exception e) {
+            System.out.println("保存私聊消息失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 保存私聊文件消息
+     */
+    public boolean savePrivateFileMessage(String fromUserId, String toUserId, String messageType,
+                                        String content, String filePath, String fileName, long fileSize) {
+        try {
+            return userDB.saveChatRecord(fromUserId, toUserId, messageType, content, filePath, fileName, fileSize);
+        } catch (Exception e) {
+            System.out.println("保存私聊文件消息失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 标记消息为已读
+     */
+    public boolean markMessagesAsRead(String fromUserId, String toUserId) {
+        try {
+            return userDB.markMessagesAsRead(fromUserId, toUserId);
+        } catch (Exception e) {
+            System.out.println("标记消息已读失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取用户的未读消息总数
+     */
+    public int getUnreadMessageCount(String userId) {
+        try {
+            return userDB.getUnreadMessageCount(userId);
+        } catch (Exception e) {
+            System.out.println("获取未读消息数量失败: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * 获取两个用户间的聊天记录
+     */
+    public List<Model.ChatRecord> getChatHistory(String userId1, String userId2, int limit) {
+        try {
+            return userDB.getFriendChatHistory(userId1, userId2, limit);
+        } catch (Exception e) {
+            System.out.println("获取聊天历史失败: " + e.getMessage());
+            return new ArrayList<>();
+        }
     }
 
     /**

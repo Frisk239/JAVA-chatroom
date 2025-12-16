@@ -87,6 +87,30 @@ public class DBInit {
             chatroomStmt.executeUpdate(createFriendRequestsTable);
             System.out.println("✅ friend_requests表创建成功!");
 
+            // 创建聊天记录表
+            String createChatRecordsTable = "CREATE TABLE IF NOT EXISTS chat_records (" +
+                "id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                "from_user_id VARCHAR(20) NOT NULL COMMENT '发送者用户ID'," +
+                "to_user_id VARCHAR(20) NOT NULL COMMENT '接收者用户ID'," +
+                "group_id VARCHAR(20) DEFAULT NULL COMMENT '群组ID（私聊时为NULL）'," +
+                "message_type VARCHAR(20) NOT NULL DEFAULT 'text' COMMENT '消息类型：text, image, file, voice, system'," +
+                "content TEXT COMMENT '消息内容'," +
+                "file_path VARCHAR(500) DEFAULT NULL COMMENT '文件路径'," +
+                "file_name VARCHAR(255) DEFAULT NULL COMMENT '文件名'," +
+                "file_size BIGINT DEFAULT NULL COMMENT '文件大小（字节）'," +
+                "is_read TINYINT DEFAULT 0 COMMENT '是否已读：0=未读，1=已读'," +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                "INDEX idx_from_user (from_user_id)," +
+                "INDEX idx_to_user (to_user_id)," +
+                "INDEX idx_group_id (group_id)," +
+                "INDEX idx_message_type (message_type)," +
+                "INDEX idx_created_at (created_at)," +
+                "INDEX idx_is_read (is_read)" +
+                ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='聊天记录表'";
+
+            chatroomStmt.executeUpdate(createChatRecordsTable);
+            System.out.println("✅ chat_records表创建成功!");
+
             chatroomStmt.close();
             chatroomConn.close();
 

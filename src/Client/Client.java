@@ -44,6 +44,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
+import javax.swing.SwingUtilities;
 import javax.swing.border.TitledBorder;
 import java.io.File;
 import java.io.FileInputStream;
@@ -81,7 +82,7 @@ public class Client extends JFrame {
 	private static final int DEFAULT_PORT=8888;
 	private static  final  String DEFAULT_IP="127.0.0.1";
 	private  static final int BUFFER_SIZE=1024;
-	private PlayWAV playWAV = new PlayWAV();
+	public PlayWAV playWAV = new PlayWAV();
 
 	private JFrame frame;
 	// private JTextArea text_show;
@@ -131,6 +132,7 @@ public class Client extends JFrame {
 	// 好友管理窗口
 	private AddFriendWindow addFriendWindow;
 	private FriendRequestWindow friendRequestWindow;
+	private FriendListWindow friendListWindow;
 	private AudioInputStream ais = null;
 	private Boolean stopflag = false;
 
@@ -537,7 +539,8 @@ public class Client extends JFrame {
 		try {
 
 			sendMessage(name + "@" + "DELETE");// ���ͶϿ����������������
-			messageThread.stop();// ֹͣ������Ϣ�߳�
+			messageThread.running = false; // 安全停止消息线程
+			messageThread.interrupt();
 			// �ͷ���Դ
 			if (reader != null) {
 				reader.close();
@@ -975,8 +978,23 @@ javax.swing.JTextArea recordText = new javax.swing.JTextArea(content);
 	 * 显示好友列表窗口
 	 */
 	public void showFriendListWindow() {
-		FriendListWindow friendListWindow = new FriendListWindow(this);
+		// 如果窗口已存在，直接显示
+		if (friendListWindow != null && friendListWindow.isShowing()) {
+			friendListWindow.toFront();
+			return;
+		}
+
+		// 创建新窗口并保存引用
+		friendListWindow = new FriendListWindow(this);
 		friendListWindow.setVisible(true);
+
+		// 添加窗口关闭监听器，清除引用
+		friendListWindow.addWindowListener(new java.awt.event.WindowAdapter() {
+			@Override
+			public void windowClosed(java.awt.event.WindowEvent e) {
+				friendListWindow = null;
+			}
+		});
 	}
 
 	// 消息接收线程
@@ -985,6 +1003,7 @@ javax.swing.JTextArea recordText = new javax.swing.JTextArea(content);
 	// ���Ͻ�����Ϣ���߳�
 	class MessageThread extends Thread {
 		private BufferedReader reader;
+		volatile boolean running = true;
 
 		// ������Ϣ�̵߳Ĺ��췽��
 		public MessageThread(BufferedReader reader) {
@@ -994,7 +1013,7 @@ javax.swing.JTextArea recordText = new javax.swing.JTextArea(content);
 		@SuppressWarnings("unlikely-arg-type")
 		public void run() {
 			String message = "";
-			while (true) {
+			while (running) {
 				try {
 					if (flag == 0) {
 						message = reader.readLine();
@@ -1125,16 +1144,88 @@ javax.swing.JTextArea recordText = new javax.swing.JTextArea(content);
 								System.out.println("AddFriendWindow不存在或未显示");
 							}
 						}
+						// ==================== 私聊消息处理 ====================
+						// 接收私聊消息
+						else if (command.equals("PRIVATE_MESSAGE")) {
+							String fromUserId = str_msg[0];
+							String messageType = str_msg[2];
+							String messageContent = str_msg.length > 3 ? str_msg[3] : "";
+
+							System.out.println("收到私聊消息: " + fromUserId + " -> " + name + " 类型:" + messageType);
+
+							// 查找对应的私聊窗口
+							PrivateChatWindow privateChatWindow = PrivateChatWindow.getOpenWindow(fromUserId);
+							if (privateChatWindow != null) {
+								// 如果窗口已打开，直接显示消息
+								privateChatWindow.receiveMessage(fromUserId, messageContent, messageType);
+							} else {
+								// 如果窗口未打开，显示提示对话框
+								System.out.println("收到来自 " + fromUserId + " 的私聊消息，但窗口未打开");
+								showNewMessageNotification(fromUserId, messageType, messageContent);
+							}
+						}
+						// 私聊文件传输准备
+						else if (command.equals("PRIVATE_FILE_READY")) {
+							String targetUserId = str_msg[2];
+							String fileName = str_msg[3];
+							long fileSize = Long.parseLong(str_msg[4]);
+
+							System.out.println("准备接收私聊文件: " + fileName + " 大小:" + fileSize);
+							// 这里可以添加文件接收逻辑
+						}
+						// 消息已读确认
+						else if (command.equals("INFO")) {
+							String infoMessage = str_msg.length > 2 ? str_msg[2] : "";
+							System.out.println("服务器信息: " + infoMessage);
+						}
+						// 错误消息处理
+						else if (command.equals("ERROR")) {
+							String errorMessage = str_msg.length > 2 ? str_msg[2] : "";
+							JOptionPane.showMessageDialog(frame, errorMessage, "错误", JOptionPane.ERROR_MESSAGE);
+							System.out.println("服务器错误: " + errorMessage);
+						}
+						// 未读消息数量
+						else if (command.equals("UNREAD_COUNT")) {
+							int unreadCount = Integer.parseInt(str_msg[2]);
+							System.out.println("未读消息数量: " + unreadCount);
+							// 可以在这里更新UI显示未读消息数
+						}
 						// 好友列表响应
 						else if (command.equals("FRIEND_LIST_RESULT")) {
 							try {
-								Gson gson = new Gson();
 								String friendListJson = str_msg[2];
+								System.out.println("收到好友列表JSON: " + friendListJson);
+								System.out.println("JSON长度: " + friendListJson.length());
+
+								Gson gson = new Gson();
 								List<Friend> friendList = gson.fromJson(friendListJson, new TypeToken<List<Friend>>() {}.getType());
+								System.out.println("JSON解析成功，好友数量: " + (friendList != null ? friendList.size() : 0));
+
+								if (friendList != null) {
+									for (int i = 0; i < friendList.size(); i++) {
+										Friend friend = friendList.get(i);
+										System.out.println("好友 " + i + ": " +
+											"ID=" + friend.getFriendId() +
+											", 昵称=" + friend.getFriendNickname() +
+											", 头像=" + friend.getFriendAvatar() +
+											", 在线=" + friend.isOnline());
+									}
+								}
+
 								// 更新好友列表窗口
-								// 需要与FriendListWindow实例关联
+								if (friendListWindow != null && friendListWindow.isShowing()) {
+									friendListWindow.updateFriendList(friendList);
+									System.out.println("已更新好友列表窗口");
+								} else {
+									System.out.println("好友列表窗口未显示或为null");
+									System.out.println("friendListWindow = " + friendListWindow);
+									if (friendListWindow != null) {
+										System.out.println("窗口是否显示: " + friendListWindow.isShowing());
+									}
+								}
 							} catch (Exception e) {
 								System.out.println("解析好友列表失败: " + e.getMessage());
+								e.printStackTrace();
 							}
 						}
 						// 好友申请列表响应
@@ -1278,5 +1369,210 @@ javax.swing.JTextArea recordText = new javax.swing.JTextArea(content);
 			}
 			isConnected = false;// 修改状态为关闭
 		}
+	}
+
+	// ==================== 私聊功能相关方法 ====================
+
+	/**
+	 * 发送私聊消息
+	 */
+	public void sendPrivateMessage(String targetUserId, String message, String messageType) {
+		if (!isConnected) {
+			JOptionPane.showMessageDialog(frame, "未连接到服务器", "错误", JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+
+		try {
+			String privateMessage = name + "@PRIVATE_CHAT@" + targetUserId + "@" + messageType + "@" + message;
+			sendMessage(privateMessage);
+			System.out.println("发送私聊消息: " + name + " -> " + targetUserId + " 类型:" + messageType);
+		} catch (Exception e) {
+			System.out.println("发送私聊消息失败: " + e.getMessage());
+			JOptionPane.showMessageDialog(frame, "发送私聊消息失败: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	/**
+	 * 发送私聊文件
+	 */
+	public void sendPrivateFile(String targetUserId, File file) {
+		if (!isConnected) {
+			JOptionPane.showMessageDialog(frame, "未连接到服务器", "错误", JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+
+		try {
+			// 先发送文件传输请求
+			String fileRequest = name + "@PRIVATE_FILE@" + targetUserId + "@" + file.getName() + "@" + file.length();
+			sendMessage(fileRequest);
+
+			System.out.println("发送私聊文件请求: " + name + " -> " + targetUserId + " 文件:" + file.getName());
+		} catch (Exception e) {
+			System.out.println("发送私聊文件请求失败: " + e.getMessage());
+			JOptionPane.showMessageDialog(frame, "发送文件请求失败: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	/**
+	 * 发送私聊图片
+	 */
+	public void sendPrivateImage(String targetUserId, File imageFile) {
+		sendPrivateFile(targetUserId, imageFile);
+	}
+
+	/**
+	 * 标记消息为已读
+	 */
+	public void markMessagesAsRead(String fromUserId) {
+		if (!isConnected) {
+			return;
+		}
+
+		try {
+			String markReadMessage = name + "@MARK_MESSAGES_READ@" + fromUserId;
+			sendMessage(markReadMessage);
+			System.out.println("标记消息已读: " + fromUserId + " -> " + name);
+		} catch (Exception e) {
+			System.out.println("标记消息已读失败: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * 获取未读消息数量
+	 */
+	public void getUnreadMessageCount() {
+		if (!isConnected) {
+			return;
+		}
+
+		try {
+			String getUnreadMessage = name + "@GET_UNREAD_COUNT@";
+			sendMessage(getUnreadMessage);
+		} catch (Exception e) {
+			System.out.println("获取未读消息数量失败: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * 获取当前用户ID
+	 */
+	public String getCurrentUserId() {
+		return name;
+	}
+
+	/**
+	 * 获取私聊窗口管理器中的所有窗口
+	 */
+	public static java.util.Map<String, PrivateChatWindow> getPrivateChatWindows() {
+		return PrivateChatWindow.getAllOpenWindows();
+	}
+
+	/**
+	 * 关闭所有私聊窗口
+	 */
+	public void closeAllPrivateChatWindows() {
+		java.util.Map<String, PrivateChatWindow> windows = PrivateChatWindow.getAllOpenWindows();
+		for (PrivateChatWindow window : windows.values()) {
+			if (window != null && window.isVisible()) {
+				window.dispose();
+			}
+		}
+	}
+
+	/**
+	 * 显示新消息通知对话框
+	 */
+	private void showNewMessageNotification(String fromUserId, String messageType, String messageContent) {
+		SwingUtilities.invokeLater(() -> {
+			// 获取消息类型描述
+			String typeDesc = "";
+			switch (messageType) {
+				case "text":
+					typeDesc = "文本消息";
+					break;
+				case "image":
+					typeDesc = "图片消息";
+					break;
+				case "file":
+					typeDesc = "文件消息";
+					break;
+				case "voice":
+					typeDesc = "语音消息";
+					break;
+				default:
+					typeDesc = "消息";
+					break;
+			}
+
+			// 构建提示消息
+			String preview = "";
+			if ("text".equals(messageType) && messageContent != null && !messageContent.isEmpty()) {
+				preview = messageContent.length() > 20 ? messageContent.substring(0, 20) + "..." : messageContent;
+			} else {
+				preview = typeDesc;
+			}
+
+			// 显示确认对话框
+			int result = JOptionPane.showConfirmDialog(
+				frame,
+				"来自用户 " + fromUserId + " 的" + typeDesc + "：\n\"" + preview + "\"\n\n是否打开私聊窗口？",
+				"新私聊消息",
+				JOptionPane.YES_NO_OPTION,
+				JOptionPane.INFORMATION_MESSAGE
+			);
+
+			// 播放提示音
+			playWAV.Play("sounds/msg.wav");
+
+			if (result == JOptionPane.YES_OPTION) {
+				// 用户选择打开私聊窗口
+				openPrivateChatForUser(fromUserId, messageType, messageContent);
+			}
+		});
+	}
+
+	/**
+	 * 为指定用户打开私聊窗口
+	 */
+	private void openPrivateChatForUser(String fromUserId, String messageType, String messageContent) {
+		// 从好友列表中查找好友信息
+		if (friendListWindow != null && friendListWindow.getFriends() != null) {
+			for (Model.Friend friend : friendListWindow.getFriends()) {
+				if (friend.getFriendId().equals(fromUserId)) {
+					// 检查是否已有窗口
+					PrivateChatWindow existingWindow = PrivateChatWindow.getOpenWindow(fromUserId);
+					if (existingWindow != null) {
+						existingWindow.toFront();
+						existingWindow.setState(JFrame.NORMAL);
+					} else {
+						// 创建新的私聊窗口
+						PrivateChatWindow chatWindow = new PrivateChatWindow(
+							this,
+							friend,
+							getCurrentUserId()
+						);
+						chatWindow.setVisible(true);
+						// 显示收到的消息
+						chatWindow.receiveMessage(fromUserId, messageContent, messageType);
+					}
+					return;
+				}
+			}
+		}
+
+		// 如果没找到好友信息，创建一个临时窗口
+		Model.Friend tempFriend = new Model.Friend();
+		tempFriend.setFriendId(fromUserId);
+		tempFriend.setFriendNickname("用户" + fromUserId);
+		tempFriend.setOnline(true);
+
+		PrivateChatWindow chatWindow = new PrivateChatWindow(
+			this,
+			tempFriend,
+			getCurrentUserId()
+		);
+		chatWindow.setVisible(true);
+		// 显示收到的消息
+		chatWindow.receiveMessage(fromUserId, messageContent, messageType);
 	}
 }

@@ -322,6 +322,7 @@ public class UserDB {
 	 * 获取用户的好友列表
 	 */
 	public List<Friend> getFriendList(String userId) {
+		System.out.println("开始从数据库获取好友列表，用户ID: " + userId);
 		List<Friend> friendList = new ArrayList<>();
 		try {
 			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
@@ -331,8 +332,11 @@ public class UserDB {
 			PreparedStatement ps = conn.prepareStatement(sql);
 			ps.setString(1, userId);
 
+			System.out.println("执行SQL: " + sql);
 			ResultSet rs = ps.executeQuery();
+			int count = 0;
 			while (rs.next()) {
+				count++;
 				Friend friend = new Friend();
 				friend.setId(rs.getInt("id"));
 				friend.setUserId(rs.getString("user_id"));
@@ -340,16 +344,30 @@ public class UserDB {
 				friend.setStatus(rs.getInt("status"));
 				friend.setCreatedTime(rs.getTimestamp("created_at"));
 				friend.setUpdatedTime(rs.getTimestamp("updated_at"));
-				friend.setFriendNickname(rs.getString("nickname"));
-				friend.setFriendAvatar(rs.getString("avatar"));
-				friend.setFriendRemark(rs.getString("nickname")); // 暂时使用昵称作为备注
+
+				// 获取用户信息
+				String nickname = rs.getString("nickname");
+				String avatar = rs.getString("avatar");
+				String username = rs.getString("username");
+
+				System.out.println("用户记录 " + count + ": " +
+					"friend_id=" + rs.getString("friend_id") +
+					", username=" + username +
+					", nickname=" + nickname +
+					", avatar=" + avatar);
+
+				friend.setFriendNickname(nickname);
+				friend.setFriendAvatar(avatar);
+				friend.setFriendRemark(nickname); // 暂时使用昵称作为备注
 				friendList.add(friend);
 			}
 			rs.close();
 			ps.close();
 			conn.close();
+			System.out.println("从数据库查询到 " + count + " 个好友记录");
 		} catch (SQLException e) {
 			System.out.println("获取好友列表失败:" + e.getMessage());
+			e.printStackTrace();
 		}
 		return friendList;
 	}
@@ -497,6 +515,260 @@ public class UserDB {
 		} catch (java.security.NoSuchAlgorithmException e) {
 			System.out.println("MD5加密失败:" + e.getMessage());
 			return null;
+		}
+	}
+
+	// ========== 聊天记录相关方法 ==========
+
+	/**
+	 * 保存聊天记录
+	 */
+	public boolean saveChatRecord(String fromUserId, String toUserId, String messageType,
+	                                 String content, String filePath, String fileName, Long fileSize) {
+		try {
+			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
+			String sql = "INSERT INTO chat_records (from_user_id, to_user_id, message_type, content, file_path, file_name, file_size, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, 0)";
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ps.setString(1, fromUserId);
+			ps.setString(2, toUserId);
+			ps.setString(3, messageType);
+			ps.setString(4, content);
+			ps.setString(5, filePath);
+			ps.setString(6, fileName);
+			if (fileSize != null) {
+				ps.setLong(7, fileSize);
+			} else {
+				ps.setNull(7, java.sql.Types.BIGINT);
+			}
+
+			int count = ps.executeUpdate();
+			ps.close();
+			conn.close();
+			return count > 0;
+		} catch (SQLException e) {
+			System.out.println("保存聊天记录失败: " + e.getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * 保存简单的文本聊天记录
+	 */
+	public boolean saveChatRecord(String fromUserId, String toUserId, String content) {
+		return saveChatRecord(fromUserId, toUserId, "text", content, null, null, null);
+	}
+
+	/**
+	 * 获取好友聊天记录（双向查询）
+	 */
+	public java.util.List<Model.ChatRecord> getFriendChatHistory(String userId1, String userId2, int limit) {
+		java.util.List<Model.ChatRecord> records = new java.util.ArrayList<>();
+		try {
+			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
+			String sql = "SELECT * FROM chat_records WHERE " +
+						"((from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)) " +
+						"ORDER BY created_at DESC LIMIT ?";
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ps.setString(1, userId1);
+			ps.setString(2, userId2);
+			ps.setString(3, userId2);
+			ps.setString(4, userId1);
+			ps.setInt(5, limit);
+
+			ResultSet rs = ps.executeQuery();
+			while (rs.next()) {
+				Model.ChatRecord record = new Model.ChatRecord();
+				record.setId(rs.getLong("id"));
+				record.setFromUserId(rs.getString("from_user_id"));
+				record.setToUserId(rs.getString("to_user_id"));
+				record.setGroupId(rs.getString("group_id"));
+				record.setMessageType(rs.getString("message_type"));
+				record.setContent(rs.getString("content"));
+				record.setFilePath(rs.getString("file_path"));
+				record.setFileName(rs.getString("file_name"));
+				record.setFileSize(rs.getLong("file_size"));
+				record.setIsRead(rs.getInt("is_read"));
+				record.setCreatedTime(rs.getTimestamp("created_at"));
+				records.add(record);
+			}
+			rs.close();
+			ps.close();
+			conn.close();
+		} catch (SQLException e) {
+			System.out.println("获取聊天记录失败: " + e.getMessage());
+		}
+		return records;
+	}
+
+	/**
+	 * 获取单方向聊天记录（从fromUser到toUser）
+	 */
+	public java.util.List<Model.ChatRecord> getChatHistoryFromUser(String fromUserId, String toUserId, int limit) {
+		java.util.List<Model.ChatRecord> records = new java.util.ArrayList<>();
+		try {
+			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
+			String sql = "SELECT * FROM chat_records WHERE from_user_id = ? AND to_user_id = ? ORDER BY created_at DESC LIMIT ?";
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ps.setString(1, fromUserId);
+			ps.setString(2, toUserId);
+			ps.setInt(3, limit);
+
+			ResultSet rs = ps.executeQuery();
+			while (rs.next()) {
+				Model.ChatRecord record = new Model.ChatRecord();
+				record.setId(rs.getLong("id"));
+				record.setFromUserId(rs.getString("from_user_id"));
+				record.setToUserId(rs.getString("to_user_id"));
+				record.setGroupId(rs.getString("group_id"));
+				record.setMessageType(rs.getString("message_type"));
+				record.setContent(rs.getString("content"));
+				record.setFilePath(rs.getString("file_path"));
+				record.setFileName(rs.getString("file_name"));
+				record.setFileSize(rs.getLong("file_size"));
+				record.setIsRead(rs.getInt("is_read"));
+				record.setCreatedTime(rs.getTimestamp("created_at"));
+				records.add(record);
+			}
+			rs.close();
+			ps.close();
+			conn.close();
+		} catch (SQLException e) {
+			System.out.println("获取聊天记录失败: " + e.getMessage());
+		}
+		return records;
+	}
+
+	/**
+	 * 标记消息为已读（fromUser发送给toUser的消息）
+	 */
+	public boolean markMessagesAsRead(String fromUserId, String toUserId) {
+		try {
+			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
+			String sql = "UPDATE chat_records SET is_read = 1 WHERE from_user_id = ? AND to_user_id = ? AND is_read = 0";
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ps.setString(1, fromUserId);
+			ps.setString(2, toUserId);
+
+			int count = ps.executeUpdate();
+			ps.close();
+			conn.close();
+			return count > 0;
+		} catch (SQLException e) {
+			System.out.println("标记消息已读失败: " + e.getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * 标记用户的所有未读消息为已读
+	 */
+	public boolean markAllMessagesAsRead(String userId) {
+		try {
+			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
+			String sql = "UPDATE chat_records SET is_read = 1 WHERE to_user_id = ? AND is_read = 0";
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ps.setString(1, userId);
+
+			int count = ps.executeUpdate();
+			ps.close();
+			conn.close();
+			System.out.println("用户 " + userId + " 标记了 " + count + " 条消息为已读");
+			return count > 0;
+		} catch (SQLException e) {
+			System.out.println("标记所有消息已读失败: " + e.getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * 获取用户的未读消息数量
+	 */
+	public int getUnreadMessageCount(String userId) {
+		try {
+			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
+			String sql = "SELECT COUNT(*) FROM chat_records WHERE to_user_id = ? AND is_read = 0";
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ps.setString(1, userId);
+
+			ResultSet rs = ps.executeQuery();
+			int count = 0;
+			if (rs.next()) {
+				count = rs.getInt(1);
+			}
+			rs.close();
+			ps.close();
+			conn.close();
+			return count;
+		} catch (SQLException e) {
+			System.out.println("获取未读消息数量失败: " + e.getMessage());
+			return 0;
+		}
+	}
+
+	/**
+	 * 获取与特定好友的未读消息数量
+	 */
+	public int getUnreadMessageCountFromFriend(String fromUserId, String toUserId) {
+		try {
+			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
+			String sql = "SELECT COUNT(*) FROM chat_records WHERE from_user_id = ? AND to_user_id = ? AND is_read = 0";
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ps.setString(1, fromUserId);
+			ps.setString(2, toUserId);
+
+			ResultSet rs = ps.executeQuery();
+			int count = 0;
+			if (rs.next()) {
+				count = rs.getInt(1);
+			}
+			rs.close();
+			ps.close();
+			conn.close();
+			return count;
+		} catch (SQLException e) {
+			System.out.println("获取好友未读消息数量失败: " + e.getMessage());
+			return 0;
+		}
+	}
+
+	/**
+	 * 删除聊天记录
+	 */
+	public boolean deleteChatRecord(long recordId) {
+		try {
+			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
+			String sql = "DELETE FROM chat_records WHERE id = ?";
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ps.setLong(1, recordId);
+
+			int count = ps.executeUpdate();
+			ps.close();
+			conn.close();
+			return count > 0;
+		} catch (SQLException e) {
+			System.out.println("删除聊天记录失败: " + e.getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * 清空用户的所有聊天记录
+	 */
+	public boolean clearAllChatRecords(String userId) {
+		try {
+			Connection conn = DriverManager.getConnection(url, sqluser, sqlpassword);
+			String sql = "DELETE FROM chat_records WHERE from_user_id = ? OR to_user_id = ?";
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ps.setString(1, userId);
+			ps.setString(2, userId);
+
+			int count = ps.executeUpdate();
+			ps.close();
+			conn.close();
+			return count > 0;
+		} catch (SQLException e) {
+			System.out.println("清空聊天记录失败: " + e.getMessage());
+			return false;
 		}
 	}
 

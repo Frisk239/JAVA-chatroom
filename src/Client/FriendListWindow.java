@@ -213,17 +213,31 @@ public class FriendListWindow extends JFrame {
      * 更新好友列表显示
      */
     public void updateFriendList(List<Friend> friendList) {
+        System.out.println("FriendListWindow.updateFriendList 被调用");
+        System.out.println("收到好友列表: " + (friendList != null ? friendList.size() : 0) + " 个好友");
+
         this.friends = friendList;
         listModel.clear();
 
         if (friendList != null && !friendList.isEmpty()) {
-            for (Friend friend : friendList) {
+            for (int i = 0; i < friendList.size(); i++) {
+                Friend friend = friendList.get(i);
+                System.out.println("处理好友 " + i + ": " +
+                    "ID=" + friend.getFriendId() +
+                    ", 昵称=" + friend.getFriendNickname() +
+                    ", 头像=" + friend.getFriendAvatar() +
+                    ", 在线=" + friend.isOnline());
+
                 String displayText = formatFriendDisplay(friend);
+                System.out.println("显示文本: " + displayText);
                 listModel.addElement(displayText);
             }
         } else {
+            System.out.println("好友列表为空，显示'暂无好友'");
             listModel.addElement("暂无好友");
         }
+
+        System.out.println("listModel 现在有 " + listModel.getSize() + " 个元素");
 
         // 更新标题显示好友数量
         int count = friendList != null ? friendList.size() : 0;
@@ -240,6 +254,13 @@ public class FriendListWindow extends JFrame {
         } else {
             btnFriendRequests.setText("好友申请");
         }
+    }
+
+    /**
+     * 获取好友列表
+     */
+    public List<Friend> getFriends() {
+        return this.friends;
     }
 
     /**
@@ -266,8 +287,24 @@ public class FriendListWindow extends JFrame {
         if (selectedIndex >= 0 && friends != null && selectedIndex < friends.size()) {
             Friend selectedFriend = friends.get(selectedIndex);
             if (parentClient != null) {
-                parentClient.setPrivateChatTarget(selectedFriend.getFriendNickname());
+                // 检查是否已经有该好友的私聊窗口打开
+                PrivateChatWindow existingWindow = PrivateChatWindow.getOpenWindow(selectedFriend.getFriendId());
+                if (existingWindow != null) {
+                    // 如果窗口已存在，将其置前
+                    existingWindow.toFront();
+                    existingWindow.setState(JFrame.NORMAL);
+                } else {
+                    // 创建新的私聊窗口
+                    PrivateChatWindow chatWindow = new PrivateChatWindow(
+                        parentClient,
+                        selectedFriend,
+                        parentClient.getCurrentUserId()
+                    );
+                    chatWindow.setVisible(true);
+                }
             }
+        } else {
+            JOptionPane.showMessageDialog(this, "请先选择一个好友", "提示", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 

@@ -252,7 +252,7 @@ public class ServerThread extends Thread {
 							System.out.println("获取好友列表: " + currentUserId);
 
 							String friendListJson = friendManager.getFriendListJson(currentUserId);
-							ps.println("Server@FRIEND_LIST@" + friendListJson);
+							ps.println("Server@FRIEND_LIST_RESULT@" + friendListJson);
 
 						} else if (command.equals("FRIEND_REQUESTS")) {
 							// 获取待处理的好友申请：格式：发送者@FRIEND_REQUESTS
@@ -293,6 +293,88 @@ public class ServerThread extends Thread {
 							System.out.println("发送搜索结果JSON: " + searchResultsJson);
 							ps.println("Server@USER_SEARCH_RESULT@" + searchResultsJson);
 							System.out.println("已发送USER_SEARCH_RESULT消息");
+
+						} else if (command.equals("PRIVATE_CHAT")) {
+							// 私聊消息：格式：发送者@PRIVATE_CHAT@目标用户ID@消息类型@消息内容
+							String targetUserId = str_msg[2];
+							String messageType = str_msg[3];
+							String messageContent = str_msg.length > 4 ? str_msg[4] : "";
+							System.out.println("私聊消息: " + currentUserId + " -> " + targetUserId + " 类型:" + messageType);
+
+							// 验证好友关系
+							if (!friendManager.areFriends(currentUserId, targetUserId)) {
+								ps.println("Server@ERROR@不是好友关系，无法发送私聊消息");
+								break;
+							}
+
+							// 保存消息到数据库
+							boolean saved = friendManager.savePrivateMessage(currentUserId, targetUserId, messageType, messageContent);
+							if (!saved) {
+								ps.println("Server@ERROR@消息保存失败");
+								break;
+							}
+
+							// 查找目标用户是否在线
+							boolean targetOnline = false;
+							for (User onlineUser : Server.clients_string.map.keySet()) {
+								if (onlineUser.getName().equals(targetUserId)) {
+									targetOnline = true;
+									PrintStream targetPs = Server.clients_string.map.get(onlineUser);
+
+									// 转发私聊消息给目标用户
+									String privateMessage = currentUserId + "@PRIVATE_MESSAGE@" + messageType + "@" + messageContent;
+									targetPs.println(privateMessage);
+									System.out.println("已转发私聊消息给在线用户: " + targetUserId);
+									break;
+								}
+							}
+
+							if (!targetOnline) {
+								System.out.println("目标用户离线，消息已保存到数据库");
+								ps.println("Server@INFO@消息已发送，对方离线时将保存到服务器");
+							} else {
+								ps.println("Server@INFO@消息已发送");
+							}
+
+						} else if (command.equals("PRIVATE_FILE")) {
+							// 私聊文件：格式：发送者@PRIVATE_FILE@目标用户ID@文件名@文件大小
+							String targetUserId = str_msg[2];
+							String fileName = str_msg[3];
+							long fileSize = Long.parseLong(str_msg[4]);
+							System.out.println("私聊文件: " + currentUserId + " -> " + targetUserId + " 文件:" + fileName);
+
+							// 验证好友关系
+							if (!friendManager.areFriends(currentUserId, targetUserId)) {
+								ps.println("Server@ERROR@不是好友关系，无法发送文件");
+								break;
+							}
+
+							// 设置文件传输标志
+							flag = 2; // 使用2表示私聊文件传输
+							file_name_just = fileName;
+							file_length = (int) fileSize;
+
+							// 通知客户端准备接收文件
+							ps.println("Server@PRIVATE_FILE_READY@" + targetUserId + "@" + fileName + "@" + fileSize);
+
+						} else if (command.equals("MARK_MESSAGES_READ")) {
+							// 标记消息为已读：格式：发送者@MARK_MESSAGES_READ@发送者ID
+							String fromUserId = str_msg[2];
+							System.out.println("标记消息已读: " + fromUserId + " -> " + currentUserId);
+
+							boolean marked = friendManager.markMessagesAsRead(fromUserId, currentUserId);
+							if (marked) {
+								ps.println("Server@INFO@消息已标记为已读");
+							} else {
+								ps.println("Server@ERROR@标记消息已读失败");
+							}
+
+						} else if (command.equals("GET_UNREAD_COUNT")) {
+							// 获取未读消息数量：格式：发送者@GET_UNREAD_COUNT
+							System.out.println("获取未读消息数量: " + currentUserId);
+
+							int unreadCount = friendManager.getUnreadMessageCount(currentUserId);
+							ps.println("Server@UNREAD_COUNT@" + unreadCount);
 
 						} else if (user_list > 20) {
 							PrintStream ps_ = new PrintStream(s.getOutputStream(), true, "UTF-8");
