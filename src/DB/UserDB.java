@@ -283,7 +283,7 @@ public class UserDB {
 
 			try {
 				// 更新申请状态
-				String updateRequestSql = "UPDATE friend_requests SET status = ?, processed_time = NOW() WHERE id = ?";
+				String updateRequestSql = "UPDATE friend_requests SET status = ?, updated_at = NOW() WHERE id = ?";
 				PreparedStatement updatePs = conn.prepareStatement(updateRequestSql);
 				updatePs.setInt(1, status);
 				updatePs.setInt(2, requestId);
@@ -293,7 +293,7 @@ public class UserDB {
 				// 如果同意申请，添加好友关系
 				if (status == 1) {
 					// 添加双向好友关系
-					String addFriendSql = "INSERT INTO friends (user_id, friend_id, status, created_time) VALUES (?, ?, 1, NOW()), (?, ?, 1, NOW())";
+					String addFriendSql = "INSERT INTO friends (user_id, friend_id, status, created_at) VALUES (?, ?, 1, NOW()), (?, ?, 1, NOW())";
 					PreparedStatement addPs = conn.prepareStatement(addFriendSql);
 					addPs.setString(1, fromUserId);
 					addPs.setString(2, toUserId);
@@ -338,8 +338,8 @@ public class UserDB {
 				friend.setUserId(rs.getString("user_id"));
 				friend.setFriendId(rs.getString("friend_id"));
 				friend.setStatus(rs.getInt("status"));
-				friend.setCreatedTime(rs.getTimestamp("created_time"));
-				friend.setUpdatedTime(rs.getTimestamp("updated_time"));
+				friend.setCreatedTime(rs.getTimestamp("created_at"));
+				friend.setUpdatedTime(rs.getTimestamp("updated_at"));
 				friend.setFriendNickname(rs.getString("nickname"));
 				friend.setFriendAvatar(rs.getString("avatar"));
 				friend.setFriendRemark(rs.getString("nickname")); // 暂时使用昵称作为备注

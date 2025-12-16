@@ -1177,6 +1177,8 @@ javax.swing.JTextArea recordText = new javax.swing.JTextArea(content);
 							String resultMsg = str_msg.length > 3 ? str_msg[3] : "";
 							if (success) {
 								JOptionPane.showMessageDialog(frame, "好友申请处理成功！", "成功", JOptionPane.INFORMATION_MESSAGE);
+								// 刷新好友申请列表
+								sendFriendRequestsRequest();
 							} else {
 								JOptionPane.showMessageDialog(frame, "好友申请处理失败：" + resultMsg, "失败", JOptionPane.ERROR_MESSAGE);
 							}
